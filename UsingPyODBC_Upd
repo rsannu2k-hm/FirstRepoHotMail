@@ -1,0 +1,34 @@
+import pyodbc
+username = dbutils.secrets.get(scope="zxlc0317xliippue2key02", key="svc-xlc-0317-xlii-pp-ue2-sql01-rw-spn-client-id")
+password = dbutils.secrets.get(scope="zxlc0317xliippue2key02", key="svc-xlc-0317-xlii-pp-ue2-sql01-rw-spn-client-secret")
+# Establish the connection
+try:
+    conn = pyodbc.connect(
+            f"Driver=ODBC Driver 17 for SQL Server; "
+            f"Server=z-xlc-0317-xlii-pp-ue2-sql01-xliidwlpl.database.windows.net,1433; "
+            f"Database=z-xlc-0317-xlii-pp-ue2-sdb01-xliidwlpl;"
+            f"Authentication=ActiveDirectoryServicePrincipal;UID={username};PWD={password};"
+            f"Encrypt=yes;TrustServerCertificate=no;"
+            )
+    cursor = conn.cursor()
+ 
+    # Execute your update statement
+   
+    update_query = """
+   
+ 
+UPDATE [config].[t_ingest_distribute_job_configs] set is_active = 'Y'
+where job_group_identifier in ('xliidw_ingest_swiss_genius_src_to_raw_full')
+   
+    """
+ 
+    cursor.execute(update_query)
+    conn.commit()  # Commit the transaction
+ 
+    # Close the connection
+    cursor.close()
+    conn.close()
+    print("Query updated successfully")
+except Exception as e:
+  Error_Message = "[Exception while executing the query]: " + str(e)
+  print('Exception Error: ', Error_Message)
