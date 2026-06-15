@@ -32,3 +32,15 @@ where job_group_identifier in ('xliidw_ingest_swiss_genius_src_to_raw_full')
 except Exception as e:
   Error_Message = "[Exception while executing the query]: " + str(e)
   print('Exception Error: ', Error_Message)
+----------------------------------------------------------
+
+    t_wins_dwxc030jr2_dict = {"depart" : "incoming.depart", "prgram" : "incoming.prgram","reschl" : "incoming.reschl", "polsymb" : "incoming.polsymb", "rschlg" : "incoming.rschlg","aslob" : "incoming.aslob", "rcdcnt" : "incoming.rcdcnt", "rescme" : "incoming.rescme","rsches" : "incoming.rsches", "trntyp" : "incoming.trntyp", "reschv" : "incoming.reschv","rscmes" : "incoming.rscmes", "divisn" : "incoming.divisn", "wcaind" : "incoming.wcaind","ftram6" : "incoming.ftram6", "joentt" : "incoming.joentt", "rsclgs" : "incoming.rsclgs","rescht" : "incoming.rescht", "carco" : "incoming.carco", "dac" : "incoming.dac","amount" : "incoming.amount", "resche" : "incoming.resche", "reschm" : "incoming.reschm","rschvs" : "incoming.rschvs", "clmocc" : "incoming.clmocc", "actdte" : "incoming.actdte","jocode" : "incoming.jocode", "trans" : "incoming.trans", "rschls" : "incoming.rschls"}
+    DeltaTable.forName(spark, targetTableName).alias("targetTable") \
+        .merge( 
+            df_exp_dates2out.alias("incoming"), 
+                    "targetTable.src_sys_id = incoming.src_sys_id AND targetTable.src_sys_ext_dt = incoming.src_sys_ext_dt AND targetTable.row_num = incoming.row_num"
+        ) \
+        .whenMatchedUpdate(set = t_wins_dwxc030jr2_dict) \
+        .whenNotMatchedInsertAll() \
+        .execute()
+
