@@ -1,0 +1,29 @@
+%sql
+
+select distinct
+  a.target_table_schema as `Schema Name`,
+  a.target_table_name as `Table Name`,
+  -- concat(b.target_table_schema, '.', b.target_table_name) as `Table Level 2`,
+  b.target_table_schema as `Table Level 2 Schema`,
+  b.target_table_name as `Table Level 2 Table Name`,
+  -- concat(c.target_table_schema, '.', c.target_table_name) as `Table Level 3` --,
+  c.target_table_schema as `Table Level 3 Schema`,
+  c.target_table_name as `Table Level 3 Table Name`
+  -- concat(d.target_table_schema, '.', d.target_table_name) as `Table Level 4`
+from (
+select 
+  source_table_schema, 
+  source_table_name, source_table_full_name,
+  target_table_schema, target_table_schema,
+  target_table_name
+from system.access.table_lineage
+where target_table_catalog = 'xliidw_prd_lpl'
+  and target_table_schema not like '%views%' and target_table_schema like 'staging_genius'
+) a  
+left join system.access.table_lineage b
+  on a.source_table_full_name = b.target_table_full_name
+left join system.access.table_lineage c
+  on b.source_table_full_name = c.target_table_full_name
+left join system.access.table_lineage d
+ on a.source_table_full_name = d.target_table_full_name  
+
