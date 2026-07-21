@@ -1,0 +1,178 @@
+USE [staging_genius]
+GO
+/****** Object:  StoredProcedure [dbo].[sp_DeleteStagingIncRecs_Informatica]    Script Date: 7/21/2026 2:54:04 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+                                 
+ALTER PROCEDURE [dbo].[sp_DeleteStagingIncRecs_Informatica] @TableName nvarchar(100)
+  WITH RECOMPILE AS
+
+SET NOCOUNT ON
+
+DECLARE @SQL1 VARCHAR(500)
+DECLARE @SQL2 VARCHAR(500)
+DECLARE @SQL3 VARCHAR(500)
+DECLARE @SQL4 VARCHAR(500)
+DECLARE @SQL5 VARCHAR(500)
+DECLARE @SQL6 VARCHAR(500)
+DECLARE @SQL NVARCHAR(3500)
+DECLARE @AS400Library VARCHAR(10)
+DECLARE @AS400File VARCHAR(10)
+DECLARE @StagingTable VARCHAR(50)
+DECLARE @StagingKey1 VARCHAR(30)
+DECLARE @StagingKey2 VARCHAR(30)
+DECLARE @StagingKey3 VARCHAR(30)
+DECLARE @StagingKey4 VARCHAR(30)
+DECLARE @StagingKey5 VARCHAR(30)
+DECLARE @StagingKey6 VARCHAR(30)
+DECLARE @StagingKey1Type VARCHAR(1)
+DECLARE @StagingKey2Type VARCHAR(1)
+DECLARE @StagingKey3Type VARCHAR(1)
+DECLARE @StagingKey4Type VARCHAR(1)
+DECLARE @StagingKey5Type VARCHAR(1)
+DECLARE @StagingKey6Type VARCHAR(1)
+DECLARE @ClaimToRelClaimCount FLOAT
+DECLARE @StartDate DATETIME
+
+
+DECLARE StagingSQL_Cursor CURSOR FOR SELECT
+	MISLibraryName,
+	MISFileName,
+	MISStagingDltTable,
+	'[' + RTRIM(MISStagingKeyCol1) + ']',
+	'[' + RTRIM(MISStagingKeyCol2) + ']',
+	'[' + RTRIM(MISStagingKeyCol3) + ']',
+	'[' + RTRIM(MISStagingKeyCol4) + ']',
+	'[' + RTRIM(MISStagingKeyCol5) + ']',
+	'[' + RTRIM(MISStagingKeyCol6) + ']',
+	MISStagingKeyCol1Char,
+	MISStagingKeyCol2Char,
+	MISStagingKeyCol3Char,
+	MISStagingKeyCol4Char,
+	MISStagingKeyCol5Char,
+	MISStagingKeyCol6Char
+
+FROM MISIncStagingDltTables
+/*********** Inner join to sysobjects added to ensure existance of tables to be deleted from. *************/
+INNER JOIN sysobjects
+	ON MISIncStagingDltTables.MISStagingDltTable = sysobjects.name
+WHERE sysobjects.xtype = 'U'
+AND MISStagingDltTable = @TableName
+ORDER
+BY MISStagingDltTable
+
+OPEN StagingSQL_Cursor
+
+FETCH NEXT FROM StagingSQL_Cursor INTO
+@AS400Library, @AS400File, @StagingTable, @StagingKey1, @StagingKey2, @StagingKey3, @StagingKey4, @StagingKey5, @StagingKey6,
+@StagingKey1Type, @StagingKey2Type, @StagingKey3Type, @StagingKey4Type, @StagingKey5Type, @StagingKey6Type
+
+IF (@@FETCH_STATUS = 0) BEGIN
+
+SET @StartDate = GETDATE()
+INSERT INTO IncrementalDeletesLog
+	VALUES ('Staging', @StagingTable, NULL, @StartDate, NULL, NULL)
+
+IF @StagingKey1Type = 'Y' SELECT
+	@SQL1 = N'DELETE  from ' + @StagingTable +
+	' Where EXISTS (Select * From MISIncStagingDltCols Where '
+	+ '  MISLibraryName = ' + '''' + @AS400Library + ''''
+	+ ' and MISFileName = ' + '''' + @AS400File + ''''
+	+ ' and MISStagingDltTable = ' + '''' + @StagingTable + ''''
+	+ ' and ' + @StagingKey1 + ' = MISStagingKey1Char ' ELSE SELECT
+	@SQL1 = N'DELETE from ' + @StagingTable + ' Where EXISTS (Select * From MISIncStagingDltCols Where '
+	+ '  MISLibraryName = ' + '''' + @AS400Library + ''''
+	+ ' and MISFileName = ' + '''' + @AS400File + ''''
+	+ ' and MISStagingDltTable = ' + '''' + @StagingTable + ''''
+	+ ' and ' + @StagingKey1 + ' = MISStagingKey1Num '
+
+/***  Only setup string 2 if there is a 2nd Key Field.   ***/
+IF @StagingKey2Type = 'Y' SELECT
+	@SQL2 = N' and ' + @StagingKey2 + ' = MISStagingKey2Char ' ELSE IF @StagingKey2Type = 'N' SELECT
+	@SQL2 = N' and ' + @StagingKey2 + ' = MISStagingKey2Num ' ELSE SELECT
+	@SQL2 = ''
+
+/***  Only setup string 3 if there is a 3rd Key Field.   ***/
+/*** - The @StagingKey3Type column will be blank, and hence not Y/N  ***/
+/***   if there is a 3rd Key field.      ***/
+IF (@StagingKey3Type = 'Y' AND @StagingTable <> 'RiContractsAttached') SELECT
+	@SQL3 = N' and ' + @StagingKey3 + ' = MISStagingKey3Char ' ELSE IF (@StagingKey3Type = 'N' AND @StagingTable <> 'RiContractsAttached') SELECT
+	@SQL3 = N' and ' + @StagingKey3 + ' = MISStagingKey3Num ' ELSE SELECT
+	@SQL3 = ''
+
+/***  Only setup string 4 if there is a 4th Key Field.   ***/
+/*** - The @StagingKey4Type column will be blank, and hence not Y/N  ***/
+/***   if there is a 4th Key field.      ***/
+IF (@StagingKey4Type = 'Y' AND @StagingTable <> 'RiContractsAttached') SELECT
+	@SQL4 = N' and ' + @StagingKey4 + ' = MISStagingKey4Char ' ELSE IF (@StagingKey4Type = 'N' AND @StagingTable <> 'RiContractsAttached') SELECT
+	@SQL4 = N' and ' + @StagingKey4 + ' = MISStagingKey4Num ' ELSE SELECT
+	@SQL4 = ''
+
+/***  Only setup string 5 if there is a 5th Key Field.   ***/
+/*** - The @StagingKey5Type column will be blank, and hence not Y/N  ***/
+/***   if there is a 5th Key field.      ***/
+IF (@StagingKey5Type = 'Y' AND @StagingTable <> 'RiContractsAttached') SELECT
+	@SQL5 = N' and ' + @StagingKey5 + ' = MISStagingKey5Char ' ELSE IF (@StagingKey5Type = 'N' AND @StagingTable <> 'RiContractsAttached') SELECT
+	@SQL5 = N' and ' + @StagingKey5 + ' = MISStagingKey5Num ' ELSE SELECT
+	@SQL5 = ''
+
+/***  Only setup string 6 if there is a 5th Key Field.   ***/
+/*** - The @StagingKey6Type column will be blank, and hence not Y/N  ***/
+/***   if there is a 6th Key field.      ***/
+IF (@StagingKey6Type = 'Y' AND @StagingTable <> 'RiContractsAttached') SELECT
+	@SQL6 = N' and ' + @StagingKey6 + ' = MISStagingKey6Char ' ELSE IF (@StagingKey6Type = 'N' AND @StagingTable <> 'RiContractsAttached') SELECT
+	@SQL6 = N' and ' + @StagingKey6 + ' = MISStagingKey6Num ' ELSE SELECT
+	@SQL6 = ''
+
+SELECT
+	@SQL = @SQL1 + @SQL2 + @SQL3 + @SQL4 + @SQL5 + @SQL6 + ')'
+
+
+IF @SQL <> '' AND ((@StagingTable IS NOT NULL) AND (@StagingTable <> '')) BEGIN
+
+EXEC sp_executesql @SQL
+UPDATE IncrementalDeletesLog
+SET	NumberOfRecords = @@ROWCOUNT,
+	ErrorCode = @@ERROR,
+	EndDate = GETDATE()
+WHERE StartDate = @StartDate
+AND EndDate IS NULL
+
+END
+
+
+IF (@StagingTable = 'AllTransFullDetail') BEGIN
+
+
+SET @StartDate = GETDATE()
+INSERT INTO IncrementalDeletesLog
+	VALUES ('Staging', RTRIM(@StagingTable), NULL, @StartDate, NULL, NULL)
+
+DELETE FROM AllTransFullDetail
+WHERE EXISTS (SELECT
+		*
+	FROM MISIncStagingDltcols
+	WHERE MISStagingKey1Num = FKGenIntClmNbr
+	AND MISStagingKey2Num = FKGenIntClmSec
+	AND FKGenIntStatsHeader = 0
+	AND MISStagingDltTable = 'AllTransReserves')
+
+UPDATE IncrementalDeletesLog
+SET	NumberOfRecords = @@ROWCOUNT,
+	ErrorCode = @@ERROR,
+	EndDate = GETDATE()
+WHERE StartDate = @StartDate
+AND EndDate IS NULL
+
+END
+
+END
+
+
+CLOSE StagingSQL_Cursor
+
+DEALLOCATE StagingSQL_Cursor
+
+
