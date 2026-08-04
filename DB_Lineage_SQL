@@ -1,4 +1,48 @@
 %sql
+select 
+  a.target_table_schema as `BTL Schema`,
+  a.target_table_name as `BTL View`,
+  a.target_column_name as `BTL Column`,
+  concat(b.target_table_schema, '.', b.target_table_name) as `Table Level 2`,
+  b.source_column_name as `Column Level 2`,
+  concat(c.target_table_schema, '.', c.target_table_name) as `Table Level 3`,
+  c.source_column_name as `Column Level 3`,
+  concat(d.target_table_schema, '.', d.target_table_name) as `Table Level 4`,
+  d.source_column_name as `Column Level 4`,
+  concat(e.target_table_schema, '.', e.target_table_name) as `Table Level 5`,
+  e.source_column_name as `Column Level 5`
+from (
+  select
+    target_table_schema,
+    target_table_name,
+    target_column_name,
+    source_table_full_name,
+    source_column_name,
+    target_table_full_name
+  from system.access.column_lineage
+  where target_table_catalog in ('axiom_btl_prd_lpl', 'axiom_btl_prd_spl')
+    and target_table_schema not like '%build%'
+    and target_table_schema not in ('data_governance', 'dw_btl_stg_claim', 'btl_platform_optimization','dw_btl_platform_optimization')
+    and account_id = 'cd4f7516-5ca9-413f-a0c9-b8fc41869d9c' and metastore_id = '31618468-ec94-43d2-bca1-5af17e52f257'
+) a
+left join system.access.column_lineage b
+  on a.source_table_full_name = b.target_table_full_name
+  and a.source_column_name = b.target_column_name 
+left join system.access.column_lineage c
+  on b.source_table_full_name = c.target_table_full_name
+  and b.source_column_name = c.target_column_name 
+  
+left join system.access.column_lineage d
+  on c.source_table_full_name = d.target_table_full_name
+  and c.source_column_name = d.target_column_name
+ 
+left join system.access.column_lineage e
+  on d.source_table_full_name = e.target_table_full_name
+  and d.source_column_name = e.target_column_name
+  group by all 
+order by 1,2,3
+---------------------------------------------------------------
+%sql
 
 select distinct
   a.target_table_schema as `Schema Name`,
@@ -26,4 +70,62 @@ left join system.access.table_lineage c
   on b.source_table_full_name = c.target_table_full_name
 left join system.access.table_lineage d
  on a.source_table_full_name = d.target_table_full_name  
+
+---------------------------------------------------------------------------
+# --- Configuration ---
+start_catalog = "xliidw_prd_lpl"
+start_schema  = "staging_wins"
+start_table   = "t_wins_dwxc010_full"
+n_levels      = 3  # Number of downstream levels to trace
+catalog_filter = "('xliidw_prd_lpl','xliidw_prd_spl')"  # Restrict target catalogs
+ 
+# --- Iterative N-level downstream lineage ---
+from pyspark.sql import functions as F
+from functools import reduce
+ 
+all_results = []
+current_level_df = spark.sql(f"""
+    SELECT DISTINCT
+        target_table_catalog  AS catalog_name,
+        target_table_schema   AS schema_name,
+        target_table_name     AS table_name
+    FROM system.access.table_lineage
+    WHERE source_table_catalog = '{start_catalog}'
+      AND source_table_schema  = '{start_schema}'
+      AND source_table_name    = '{start_table}'
+      AND target_table_catalog in {catalog_filter}
+""")
+ 
+for level in range(1, n_levels + 1):
+    current_level_df = current_level_df.withColumn("level", F.lit(level))
+    row_count = current_level_df.count()
+    if row_count == 0:
+        print(f"Level {level}: No further downstream tables found. Stopping.")
+        break
+    print(f"Level {level}: Found {row_count} downstream table(s)")
+    all_results.append(current_level_df)
+ 
+    # Collect current level tables to use as next source
+    current_tables = current_level_df.select("catalog_name", "schema_name", "table_name").distinct()
+    current_tables.createOrReplaceTempView("current_sources")
+ 
+    current_level_df = spark.sql(f"""
+        SELECT DISTINCT
+            tl.target_table_catalog AS catalog_name,
+            tl.target_table_schema  AS schema_name,
+            tl.target_table_name    AS table_name
+        FROM system.access.table_lineage tl
+        INNER JOIN current_sources cs
+            ON tl.source_table_catalog = cs.catalog_name
+           AND tl.source_table_schema  = cs.schema_name
+           AND tl.source_table_name    = cs.table_name
+        WHERE tl.target_table_catalog IN {catalog_filter}
+    """)
+ 
+if all_results:
+    result_df = reduce(lambda a, b: a.unionAll(b), all_results).distinct()
+    result_df = result_df.orderBy("level", "catalog_name", "schema_name", "table_name")
+    display(result_df)
+else:
+    print("No downstream lineage found.")
 
