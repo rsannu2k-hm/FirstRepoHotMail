@@ -128,4 +128,29 @@ if all_results:
     display(result_df)
 else:
     print("No downstream lineage found.")
+---=============================================================================
+WITH lineage_enriched AS (
+SELECT
+    tl.*,
+    COALESCE(
+    tl.source_table_full_name,
+    CONCAT(src.table_catalog, '.', src.table_schema, '.', src.table_name)
+) AS resolved_source_table,
+COALESCE(
+    tl.target_table_full_name,
+    CONCAT(tgt.table_catalog, '.', tgt.table_schema, '.', tgt.table_name)
+) AS resolved_target_table
+FROM system.access.table_lineage tl
+LEFT JOIN system.information_schema.tables src
+       ON tl.source_path = src.storage_path
+LEFT JOIN system.information_schema.tables tgt
+       ON tl.target_path = tgt.storage_path
+)
 
+SELECT
+    resolved_source_table AS source_table,
+    resolved_target_table AS target_table,
+    *
+FROM lineage_enriched
+WHERE resolved_source_table = '<CATALOG>.<SCHEMA>.<TABLE>'
+OR resolved_target_table = '<CATALOG>.<SCHEMA>.<TABLE>';
