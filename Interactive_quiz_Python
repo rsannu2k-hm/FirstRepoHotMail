@@ -1,0 +1,47 @@
+#A simple interactive quiz built with Python that randomly selects questions, checks answers, and calculates your final score. Perfect for practicing Python while having fun!
+
+
+import random
+
+questions = [
+    ("What is the output of 2 ** 3?", "8"),
+    ("Which keyword creates a function?", "def"),
+    ("What type is [1, 2, 3]?", "list"),
+    ("Which symbol starts a comment?", "#"),
+    ("What does len() return?", "length")
+]
+
+random.shuffle(questions)
+score = 0
+
+print("\n" + "=" * 55)
+print("         PYTHON QUICK QUIZ")
+print("=" * 55)
+
+for number, (question, answer) in enumerate(questions, 1):
+    print(f"\nQ{number}.{question}")
+    user_answer = input("Answer: ").strip().lower()
+
+    if user_answer == answer.lower():
+        print("/ Correct!")
+        score += 1
+    else:
+        print(f"X Wrong! Correct answer: {answer}")
+
+    percentage = (score / len(questions)) * 100
+
+    print("\n" + "=" * 55)
+    print("         RESULT")
+    print("=" * 55)
+
+    print(f"Score   : {score}/{len(questions)}")
+    print(f"Percentage : {percentage :.0f}%")
+
+    if percentage == 100:
+        print("! Perfect Score!")
+    elif percentage >= 60:
+        print("  Good Job!")
+    else:
+        print(" Keep Practicing!")
+
+print("=" * 55)
