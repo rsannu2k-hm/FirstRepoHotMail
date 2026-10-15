@@ -1,0 +1,57 @@
+%sql
+WITH CTE_Pol as (
+  Select
+    FKGenIntPolNum,
+    FKGenIntPolSeq,
+    PKPolNbr
+  from
+    axiom_etl_dev_lpl.btl_src.oz_gen_policydetails PolicyDetails
+  Where
+    upper(trim(PolicyDetails.PKPolNbr)) LIKE 'Q%'
+    AND upper(trim(PolicyDetails.FKMainLine)) = 'LIAB'
+    AND upper(trim(PolicyDetails.InwardsReinsuranceFlag)) = '1'
+  --AND  	PolicyDetails.expirydate >= cast(@ExpiryDate as datetime)
+),
+cte_Narratives as (
+  SELECT distinct
+    Pol.PKPolNbr,
+    NarrativeGroupCode,
+    a.linenumber,
+    concat(trim(NarrativeDesc), ' P* ') as NarrativeDesc
+  FROM
+    CTE_Pol as Pol
+      left outer join axiom_etl_dev_lpl.btl_src.oz_gen_narratives a
+        on Pol.FKGenIntPolNum = a.FKGenIntPolNum
+        AND Pol.FKGenIntPolSeq = a.FKGenIntPolSeq
+  where
+    a.NarrativeDesc is not null
+    and a.linenumber is not null
+    --and a.linenumber < 11
+    and a.pkstatsledgerseq = 0
+    and a.fkstats = 0
+    and a.fkgenintclmref = 0
+    and trim(a.fkgenintpolsec) = ''
+)
+select
+  PKPolNbr,
+  array_join(
+    transform(
+      array_sort(
+        collect_list(
+          named_struct(
+            'NarrativeGroupCode',
+            NarrativeGroupCode,
+            'LineNumber',
+            LineNumber,
+            'NarrativeDesc',
+            NarrativeDesc
+          )
+        )
+      ),
+      x -> x.NarrativeDesc
+    ),
+    ''
+  ) as Narrative
+from  cte_Narratives
+group by
+  PKPolNbr
