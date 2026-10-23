@@ -1,3 +1,4 @@
+---**** this is from CasualtyData
 %sql
 WITH CTE_Pol as (
   Select
@@ -55,3 +56,41 @@ select
 from  cte_Narratives
 group by
   PKPolNbr
+-----------------------------------------------------
+---**** this is from EDS d_narratives...
+{#
+TO_DO:
+Update
+  Header.Include Comments & Details.SQL: Table: t_ax_stg_narratives
+  XLCDIADEEP-105317: Initial version  12/Mar/26 - Atanu Hait
+#}
+
+WITH max_line_number as (
+    select PKStatsLedgerSeq, max(LineNumber)   as max_linenumber
+    FROM {{ source("db_source_lpl", "oz_gen_narratives") }}
+    WHERE PKStatsLedgerSeq != 0 AND PKStatsLedgerSeq IS NOT NULL
+    group by PKStatsLedgerSeq
+),
+ 
+final AS (
+    SELECT
+        PKStatsLedgerSeq,
+        LineNumber,
+    collect_list(NarrativeDesc) OVER (partition by PKStatsLedgerSeq
+        ORDER BY LineNumber  
+        ROWS BETWEEN 9 PRECEDING AND CURRENT ROW
+    ) as NarrativeDesc
+    FROM {{ source("db_source_lpl", "oz_gen_narratives") }}
+    WHERE PKStatsLedgerSeq != 0 AND PKStatsLedgerSeq IS NOT NULL
+    ORDER BY  LineNumber ASC
+)
+select
+final.PKStatsLedgerSeq,
+ concat_ws(' ' , final.NarrativeDesc) as NarrativeDesc
+ from
+ final 
+inner join max_line_number
+on final.pkstatsledgerseq = max_line_number.PKStatsLedgerSeq
+and final.LineNumber = max_line_number.max_linenumber
+ 
+
